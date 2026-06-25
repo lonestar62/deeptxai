@@ -67,40 +67,24 @@ app.post('/api/chat', async (req, res) => {
     return res.status(400).json({ error: 'messages required' });
   }
 
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-
   try {
-    // Dynamic import of Anthropic SDK (ESM-compatible in CJS via import())
     const { default: Anthropic } = await import('@anthropic-ai/sdk');
     const client = new Anthropic({ apiKey: ANTHROPIC_KEY });
 
     const userMessages = messages.filter(m => m.role !== 'system');
 
-    const stream = await client.messages.create({
+    const response = await client.messages.create({
       model: 'claude-haiku-4-5',
       max_tokens: 400,
       system: CHAT_SYSTEM,
       messages: userMessages,
-      stream: true,
     });
 
-    let fullText = '';
-    for await (const event of stream) {
-      if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
-        const text = event.delta.text;
-        fullText += text;
-        res.write(`data: ${JSON.stringify({ text })}\n\n`);
-      }
-    }
-
-    res.write('data: [DONE]\n\n');
-    res.end();
+    const message = response.content[0]?.text || 'Something went wrong — please try again.';
+    res.json({ message });
   } catch (e) {
     console.error('Chat error:', e.message);
-    res.write(`data: ${JSON.stringify({ error: 'Something went wrong — please try again.' })}\n\n`);
-    res.end();
+    res.status(500).json({ message: 'Something went wrong — please try again.' });
   }
 });
 
